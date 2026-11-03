@@ -1,0 +1,10 @@
+*token*.txt
+config.json
+cache/
+logs/
+__pycache__/
+*.pyc
+*.log
+.env*
+!.env.example
+node_modules/

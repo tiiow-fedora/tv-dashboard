@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TV Dashboard</title>
+<style>
+:root{--bg:#09090b;--card:#18181b;--line:#27272a;--muted:#a1a1aa;--fg:#fafafa;--acc:#14b8a6;--acc2:#0f766e;--bad:#f43f5e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,Segoe UI,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line)}
+header h1{font-size:17px;margin:0;font-weight:600}
+.pill{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--line);color:var(--muted)}
+.pill.on{background:var(--acc2);color:#ccfbf1}.pill.off{background:#4c0519;color:#fecdd3}
+main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:16px;padding:16px 20px;max-width:1500px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
+#preview{width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;display:block;object-fit:contain}
+.meta{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px;margin-top:8px;flex-wrap:wrap}
+.err{color:var(--bad)}
+button{background:var(--line);color:var(--fg);border:1px solid #3f3f46;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc2);border-color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stack{display:flex;flex-direction:column;gap:16px}
+.folder{color:var(--muted);font-size:12px;margin:12px 0 4px}
+.dash{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px}
+.dash:hover{background:#202024}
+.dash.cur{background:#042f2e}
+.dash label{flex:1;display:flex;gap:8px;align-items:center;cursor:pointer}
+.dash button{padding:3px 9px;font-size:12px}
+.order{font-size:11px;color:var(--acc);min-width:14px}
+input[type=checkbox]{accent-color:var(--acc);width:16px;height:16px}
+select,input[type=number]{background:var(--bg);color:var(--fg);border:1px solid #3f3f46;border-radius:6px;padding:6px 8px;font:inherit}
+.grid2{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.remote{display:grid;grid-template-columns:repeat(3,56px);gap:6px;justify-content:center}
+.remote button{height:44px;padding:0}
+#toast{position:fixed;bottom:16px;right:16px;background:var(--card);border:1px solid var(--line);padding:10px 14px;border-radius:8px;opacity:0;transition:opacity .2s}
+#toast.show{opacity:1}
+</style></head>
+<body>
+<header><h1>TV Dashboard</h1><span id="tvpill" class="pill">TV …</span><span style="flex:1"></span>
+<span class="pill" id="url"></span></header>
+<main>
+  <div class="stack">
+    <div class="card">
+      <h2>On the TV now</h2>
+      <img id="preview" alt="">
+      <div class="meta"><span id="curtitle">—</span><span id="rendered"></span></div>
+      <div class="meta err" id="error"></div>
+      <div class="meta" id="diag" style="word-break:break-all"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" onclick="post('/api/tv/open')">Show on TV</button>
+        <button onclick="post('/api/next')">Next dashboard</button>
+        <button onclick="post('/api/refresh')">Re-render now</button>
+        <button onclick="post('/api/tv/fullscreen')" title="Presses OK on the TV (the page turns that into fullscreen), then parks the pointer in a corner">Fullscreen + hide pointer</button>
+        <button onclick="post('/api/tv/reload')">Reload TV page</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>TV remote</h2>
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div class="stack" style="gap:8px">
+          <div class="row"><button onclick="key('KEY_POWER')">Power</button>
+            <button onclick="post('/api/tv/wake')" title="Wake-on-LAN: needs 'Power On with Mobile' enabled on the TV">Wake (WoL)</button></div>
+          <div class="row"><button onclick="key('KEY_HOME')">Home</button><button onclick="key('KEY_RETURN')">Back</button>
+            <button onclick="key('KEY_EXIT')">Exit</button></div>
+          <div class="row"><button onclick="key('KEY_VOLDOWN')">Vol −</button><button onclick="key('KEY_VOLUP')">Vol +</button>
+            <button onclick="key('KEY_MUTE')">Mute</button></div>
+          <div class="row"><button onclick="key('KEY_SOURCE')">Source</button></div>
+        </div>
+        <div class="remote">
+          <span></span><button onclick="key('KEY_UP')">▲</button><span></span>
+          <button onclick="key('KEY_LEFT')">◀</button><button class="primary" onclick="key('KEY_ENTER')">OK</button><button onclick="key('KEY_RIGHT')">▶</button>
+          <span></span><button onclick="key('KEY_DOWN')">▼</button><span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="stack">
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="grid2">
+        <span>Rotate every</span><span><input type="number" id="rotate_s" min="10" style="width:90px"> s</span>
+        <span>Re-render every</span><span><input type="number" id="refresh_s" min="10" style="width:90px"> s</span>
+        <span>Time range</span><select id="time_from">
+          <option value="now-15m">Last 15 min</option><option value="now-1h">Last 1 h</option>
+          <option value="now-3h">Last 3 h</option><option value="now-6h">Last 6 h</option>
+          <option value="now-12h">Last 12 h</option><option value="now-24h">Last 24 h</option>
+          <option value="now-7d">Last 7 d</option></select>
+        <span>Layout</span><select id="fit"><option value="whole">Fit whole dashboard on screen</option>
+          <option value="top">Top only, 1:1 (sharper)</option></select>
+        <span>Theme</span><select id="theme"><option value="dark">Dark</option><option value="light">Light</option></select>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSettings()">Save settings</button></div>
+    </div>
+    <div class="card">
+      <h2>Dashboards — tick to rotate, or Show to pin one</h2>
+      <div id="list"></div>
+      <div class="row" style="margin-top:12px"><button class="primary" onclick="saveRotation()">Use ticked as rotation</button></div>
+    </div>
+  </div>
+</main>
+<div id="toast"></div>
+<script>
+let st = null, lastVer = -1, order = [];
+const $ = id => document.getElementById(id);
+function toast(t, bad){const e=$('toast');e.textContent=t;e.style.color=bad?'var(--bad)':'';e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2200)}
+async function post(path, body){
+  try{
+    const r = await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    const j = await r.json();
+    if(!j.ok){toast(j.error||'failed',true);return}
+    toast('Done'); apply(j, path==='/api/config');
+  }catch(e){toast(String(e),true)}
+}
+const key = k => post('/api/tv/key',{key:k});
+function saveSettings(){post('/api/config',{rotate_s:+$('rotate_s').value,refresh_s:+$('refresh_s').value,time_from:$('time_from').value,theme:$('theme').value,fit:$('fit').value})}
+function saveRotation(){ if(!order.length){toast('Tick at least one',true);return} post('/api/config',{selected:order}) }
+function show(uid){order=[uid]; post('/api/config',{selected:[uid]})}
+function toggle(uid, on){ order = order.filter(u=>u!==uid); if(on) order.push(uid); renderList() }
+const esc = s => String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function renderList(){
+  let html='', folder=null;
+  for(const d of st.dashboards){
+    const f = d.folder||'(root)';
+    if(f!==folder){folder=f;html+=`<div class="folder">${esc(f)}</div>`}
+    const i = order.indexOf(d.uid);
+    html+=`<div class="dash ${d.uid===st.current?'cur':''}"><label><input type="checkbox" ${i>=0?'checked':''} onchange="toggle('${esc(d.uid)}',this.checked)">
+      <span class="order">${i>=0?i+1:''}</span>${esc(d.title)}</label><button onclick="show('${esc(d.uid)}')">Show</button></div>`;
+  }
+  $('list').innerHTML = html;
+}
+function apply(j, resetForm){
+  const first = !st; st = j;
+  if(first || resetForm){
+    order = [...j.config.selected];
+    for(const k of ['rotate_s','refresh_s','time_from','theme','fit']) $(k).value = j.config[k];
+  }
+  renderList();
+  const cur = j.dashboards.find(d=>d.uid===j.current);
+  $('curtitle').textContent = cur ? cur.title : (j.current||'rendering…');
+  $('rendered').textContent = j.last_render ? 'rendered '+Math.round(Date.now()/1000-j.last_render)+'s ago' : '';
+  $('error').textContent = j.error||'';
+  $('url').textContent = j.tv_url;
+  $('diag').textContent = j.tv_diag ? 'TV viewport: ' + j.tv_diag.split('&ua=')[0].replace(/&/g,'  ') : '';
+  if(j.version!==lastVer){lastVer=j.version;$('preview').src='/frame.jpg?v='+j.version}
+}
+async function poll(){ try{ apply(await (await fetch('/api/state')).json()) }catch(e){} }
+async function tvStatus(){
+  try{ const j = await (await fetch('/api/tv/status')).json(); const p=$('tvpill');
+    p.className='pill '+(j.tv&&j.tv.on?'on':'off'); p.textContent = j.tv ? (j.tv.on?'TV on':'TV standby') : 'TV off / unreachable';
+  }catch(e){}
+}
+poll(); tvStatus(); setInterval(poll,3000); setInterval(tvStatus,10000);
+</script>
+</body></html>
